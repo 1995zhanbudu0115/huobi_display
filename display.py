@@ -2,12 +2,14 @@ import pandas as pd
 from pyecharts import Page, Pie, Bar, Line, Gauge, Grid,Overlap
 import datetime
 import time
+import schedule
+
+# 交易日志分析
 
 
 class Display:
 
     def __init__(self):
-        # self.date = datetime.date.today()
         self.date = '2020-02-28'
         self.strategys = ['Due2_Lv1']
         self.path = 'TradeLog'
@@ -183,5 +185,13 @@ class Display:
             self.plot_page(s)
 
 
+def job():
+    print('Start Display TradeLog')
+    return Display().main()
+
+
 if __name__ == '__main__':
-    Display().main()
+    schedule.every().day.at('02:16').do(job)
+    while True:
+        schedule.run_pending()
+        time.sleep(5)
