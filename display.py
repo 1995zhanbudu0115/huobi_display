@@ -1,5 +1,5 @@
 import pandas as pd
-from pyecharts import Page,Pie,Bar,Line,Gauge
+from pyecharts import Page, Pie, Bar, Line, Gauge, Grid
 import datetime
 import time
 
@@ -36,7 +36,7 @@ class Display:
     def plot_order(self, strategy):
         order_df = self.read_data(strategy, 'order')
         state_count = order_df.groupby('State', as_index=True)['State'].count()
-        state_keys,state_values= list(state_count.index), list(state_count)
+        state_keys, state_values = list(state_count.index), list(state_count)
         self.plot_pie('成交状态', state_keys, state_values, color='#c23531')
         side_count = order_df.groupby('Side', as_index=True)['Side'].count()
         side_keys, side_values = list(side_count.index), list(side_count)
@@ -60,16 +60,27 @@ class Display:
 
     def plot_trade(self, strategy):
         trade_df = self.read_data(strategy, 'trade')
-        pass
+        volume = trade_df['Quantity'].sum()
+        trade_count = trade_df.cout()['Quantity']
+        # TODO:饼状图展示
+        side_count = trade_df.groupby('Side', as_index=True)['Side'].count()
+        # TODO：柱状图展示
+        side_sum = trade_df.groupby('Side', as_index=True)['Quantity'].sum()
 
-    def plot_performance(self):
-        pass
+    def plot_performance(self, strategy):
+        perform_df = self.read_data(strategy, 'log_performance')
+        # TODO:堆积图展示
+        exposure = perform_df['Exposure']
+        # TODO:line图展示
+        quoter_mid = perform_df['Quoter_Mid']
+        # TODO:堆积图展示
+        pnl_total = perform_df['PnL_Total']
 
     def plot_page(self, strategy):
         self.page = Page('{}-策略交易日志分析'.format(strategy))
         # self.plot_order(strategy)
-        self.plot_trade(strategy)
-        # self.plot_performance(strategy)
+        # self.plot_trade(strategy)
+        self.plot_performance(strategy)
         # pass
 
     def _check_path_(self):
