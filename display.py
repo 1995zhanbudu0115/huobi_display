@@ -3,6 +3,8 @@ from pyecharts import Page, Pie, Bar, Line, Gauge, Grid,Overlap
 import datetime
 import time
 import schedule
+import os
+import re
 
 # 交易日志分析
 
@@ -13,6 +15,7 @@ class Display:
         self.date = '2020-02-28'
         self.strategys = ['Due2_Lv1']
         self.path = 'TradeLog'
+        self.save_path = 'Report'
 
     def read_data(self, strategy, info_type):
         df = pd.read_csv(self.path+'\\{0}_{1}_{2}.csv'.format(info_type, strategy, self.date), encoding='GBK')
@@ -132,11 +135,15 @@ class Display:
         self.plot_order(strategy)
         self.plot_trade(strategy)
         self.plot_performance(strategy)
-        self.page.render('{}-策略交易日志分析.html'.format(strategy))
+        self._check_path_()
+        self.page.render(self.save_path+'\\{0}-策略交易日志分析{1}.html'.format(strategy, self.date.replace('-', '')))
         # pass
 
     def _check_path_(self):
-        pass
+        if os.path.exists(self.save_path):
+            pass
+        else:
+            os.mkdir(self.save_path)
 
     @staticmethod
     def check_time_format(data, time_columns):
@@ -190,8 +197,15 @@ def job():
     return Display().main()
 
 
-if __name__ == '__main__':
-    schedule.every().day.at('02:16').do(job)
+def exec_regular(time_):
+    # 在这里设置执行任务
+    schedule.every().day.at(time_).do(job)
     while True:
         schedule.run_pending()
         time.sleep(5)
+
+
+if __name__ == '__main__':
+    # exec_regular('00:00')
+    Display().main()
+    
