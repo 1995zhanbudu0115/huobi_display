@@ -252,7 +252,6 @@ def exec_regular(time_):
 
 
 if __name__ == '__main__':
-    # exec_regular('00:00')
     Display().main()
 
 
