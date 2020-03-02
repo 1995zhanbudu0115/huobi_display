@@ -7,6 +7,8 @@ import os
 import re
 import pdfkit
 from selenium import webdriver
+import warnings
+
 
 # 交易日志分析
 
@@ -14,14 +16,17 @@ from selenium import webdriver
 class Display:
 
     def __init__(self):
-        self.date = '2020-02-28'
-        self.strategys = ['Due2_Lv1']
+        self.date = '2020-03-01'
+        self.strategies = ['Due2']
         self.path = 'TradeLog'
         self.save_path = 'Report'
         self.pardir = os.path.dirname(__file__)
 
     def read_data(self, strategy, info_type):
-        df = pd.read_csv(self.path+'\\{0}_{1}_{2}.csv'.format(info_type, strategy, self.date), encoding='GBK')
+        try:
+            df = pd.read_csv(self.path+'\\{0}_{1}_{2}.csv'.format(info_type, strategy, self.date), encoding='GBK')
+        except FileNotFoundError:
+            raise Exception("please check the path, date, strategies")
         return df
 
     def plot_pie(self, title, keys, values, title_pos, **kwargs):
@@ -115,10 +120,12 @@ class Display:
         self.create_grid([side_count_chart, side_volume_chart],['55%','55%'])
 
     def plot_performance(self, strategy):
-        perform_df = self.read_data(strategy, 'log_performance')
+        perform_df = self.read_data(strategy, 'performance')
+        perform_df['new_time'] = perform_df['Time'].apply(lambda x: x[2:])
+        perform_df['new_time'] = perform_df['time']+perform_df['new_time']
         # TODO:堆积图展示
         exposure = perform_df['Exposure']
-        exposure_keys = list(perform_df['Time'])
+        exposure_keys = list(perform_df['new_time'])
         exposure_values = list(exposure)
         exposure_line = self.plot_line('风险敞口和报价', exposure_keys, exposure_values, area_opacity=0.4,
                                        is_datazoom_show=True, compos=True, is_label_show=True, is_splitline_show=False,
@@ -150,7 +157,7 @@ class Display:
         self.plot_trade(strategy)
         self._check_path_()
         file_name = self.save_path+'\\{0}-策略交易日志分析{1}.html'.format(strategy, self.date.replace('-', ''))
-        self.page.render()
+        self.page.render(file_name)
         self.trans_html_to_img(file_name=file_name, out_name=file_name.split('.')[0]+'.png')
         # pass
 
@@ -227,7 +234,7 @@ class Display:
         return latency_keys, latency_values, latency_max, latency_min, latency_std
 
     def main(self):
-        for s in self.strategys:
+        for s in self.strategies:
             self.plot_page(s)
 
 
@@ -247,6 +254,7 @@ def exec_regular(time_):
 if __name__ == '__main__':
     # exec_regular('00:00')
     Display().main()
+
 
 
 
