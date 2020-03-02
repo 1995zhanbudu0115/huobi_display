@@ -5,6 +5,8 @@ import time
 import schedule
 import os
 import re
+import pdfkit
+from selenium import webdriver
 
 # 交易日志分析
 
@@ -16,6 +18,7 @@ class Display:
         self.strategys = ['Due2_Lv1']
         self.path = 'TradeLog'
         self.save_path = 'Report'
+        self.pardir = os.path.dirname(__file__)
 
     def read_data(self, strategy, info_type):
         df = pd.read_csv(self.path+'\\{0}_{1}_{2}.csv'.format(info_type, strategy, self.date), encoding='GBK')
@@ -33,8 +36,7 @@ class Display:
         if bar_type == 'hist':
             chart = Bar(title, 'max:{0[0]} min:{0[1]} std:{0[2]}'.format(kwargs['info']), title_pos=title_pos)
             chart.add('延迟ms', keys, values, bar_category_gap="1%", is_label_show=True, is_legend_show=True,
-                      is_area_show=True, is_datazoom_show=False, mark_line=['min', 'max'], mark_point=['average'],
-                      yaxis_formatter='ms', **kwargs)
+                      is_area_show=True, is_datazoom_show=False, mark_line=['min', 'max'], mark_point=['average'], **kwargs)
         else:
             chart = Bar(title, title_pos=title_pos)
             chart.add('', keys, values, **kwargs)
@@ -78,14 +80,16 @@ class Display:
         latency_keys, latency_values, latency_max, latency_min, latency_std = Display.get_latency(order_df,
                                                                                                   log_type='order')
         self.order_latency = self.plot_bar('Order-延迟分布', latency_keys, latency_values, title_pos='22%',
-                                           bar_type='hist', info=[latency_max, latency_min, latency_std],legend_pos='5%')
+                                           bar_type='hist', info=[latency_max, latency_min, latency_std], legend_pos='5%',
+                                           xaxis_name='时间ms')
 
     def plot_trade(self, strategy):
         trade_df = self.read_data(strategy, 'trade')
         latency_keys, latency_values, latency_max, latency_min, latency_std = Display.get_latency(trade_df,
                                                                                                   log_type='trade')
         self.trade_latency = self.plot_bar('Trade-延迟分布', latency_keys, latency_values, title_pos='72%',
-                                           bar_type='hist', info=[latency_max, latency_min, latency_std], lengend_pos='80%')
+                                           bar_type='hist', info=[latency_max, latency_min, latency_std], lengend_pos='80%',
+                                           xaxis_name='时间ms')
         self.create_grid([self.order_latency, self.trade_latency], ['55%', '55%'])
         trade_volume = trade_df['Quantity'].sum()
         # TODO:暂时没想好怎么展示单个数字，所以使用了柱状图
@@ -101,7 +105,7 @@ class Display:
         side_count_keys = list(side_count.index)
         side_count_values = list(side_count)
         side_count_chart = self.plot_bar('Long-Short-Count', side_count_keys, side_count_values, title_pos='22%',
-                                         bar_type='normal', yaxis_formatter='笔')
+                                         bar_type='normal', yaxis_formatter='笔', xaxis_name='方向')
         # long/short volume
         # TODO：柱状图展示
         side_sum = trade_df.groupby('Side', as_index=True)['Quantity'].sum()
@@ -117,26 +121,37 @@ class Display:
         exposure_keys = list(perform_df['Time'])
         exposure_values = list(exposure)
         exposure_line = self.plot_line('风险敞口和报价', exposure_keys, exposure_values, area_opacity=0.4,
-                                       is_datazoom_show=True, compos=True, is_label_show=True, is_splitline_show=False)
+                                       is_datazoom_show=True, compos=True, is_label_show=True, is_splitline_show=False,
+                                       yaxis_name='Exposure')
         # TODO:line图展示
         quoter_mid = perform_df['Quoter_Mid']
         quoter_mid_values = list(quoter_mid)
         overlap1 = self.plot_line('报价', exposure_keys, quoter_mid_values, is_datazoom_show=True, yaxis_min='dataMin',
-                       base_line=exposure_line, compos=True, is_legend_show=True, is_splitline_show=False)
+                                   base_line=exposure_line, compos=True, is_legend_show=True, is_splitline_show=False,
+                                   yaxis_name='Quoter_Mid', yaxis_name_gap='40')
         # TODO:堆积图展示
         exposure_line2 = self.plot_line('Exposure And PnL_Total', exposure_keys, exposure_values, area_opacity=0.4,
-                                        is_datazoom_show=True, compos=True, is_label_show=True, is_splitline_show=False)
+                                        is_datazoom_show=True, compos=True, is_label_show=True, is_splitline_show=False,
+                                        yaxis_name='Exposure')
         pnl_total = list(perform_df['PnL_Total'])
         overlap2 = self.plot_line('PnL_Total', exposure_keys, pnl_total, is_datazoom_show=True, base_line=exposure_line2,
-                       compos=True, is_splitline_show=False, area_opacity=0.4)
+                                   compos=True, is_splitline_show=False, area_opacity=0.4, yaxis_name='PnL_Total')
+
+        quoter_line = self.plot_line('Pnl_Total And Quoter_Mid', exposure_keys, quoter_mid_values, yaxis_min='dataMin',
+                                     is_datazoom_show=True, is_label_show=True, is_splitline_show=False,
+                                     yaxis_name='Quoter_Mid', yaxis_name_gap='40')
+        self.plot_line('PnL_Total', exposure_keys, pnl_total, is_datazoom_show=True, base_line=quoter_line,
+                       compos=True, is_splitline_show=False, area_opacity=0.4, yaxis_name='PnL_Total')
 
     def plot_page(self, strategy):
         self.page = Page('{}-策略交易日志分析'.format(strategy))
+        self.plot_performance(strategy)
         self.plot_order(strategy)
         self.plot_trade(strategy)
-        self.plot_performance(strategy)
         self._check_path_()
-        self.page.render(self.save_path+'\\{0}-策略交易日志分析{1}.html'.format(strategy, self.date.replace('-', '')))
+        file_name = self.save_path+'\\{0}-策略交易日志分析{1}.html'.format(strategy, self.date.replace('-', ''))
+        self.page.render()
+        self.trans_html_to_img(file_name=file_name, out_name=file_name.split('.')[0]+'.png')
         # pass
 
     def _check_path_(self):
@@ -144,6 +159,30 @@ class Display:
             pass
         else:
             os.mkdir(self.save_path)
+
+    # TODO:html转pdf，本机出错，或许linux会表现好
+    @staticmethod
+    def trans_html_to_pdf(file_name, out_name):
+        config = pdfkit.configuration(wkhtmltopdf='D:\\tools\\wkhtmltopdf\\bin\\wkhtmltopdf.exe')
+        pdfkit.from_file(file_name, out_name, configuration=config)
+
+    # html 转 img
+    def trans_html_to_img(self, file_name, out_name):
+        option = webdriver.ChromeOptions()
+        option.add_argument('--headless')
+        option.add_argument('--disable-gpu')
+        option.add_argument("--window-size=1280,1024")
+        option.add_argument("--hide-scrollbars")
+
+        driver = webdriver.Chrome(chrome_options=option)
+
+        driver.get('file:///'+self.pardir+'/'+file_name)
+        time.sleep(1)
+        scroll_width = driver.execute_script('return document.body.parentNode.scrollWidth')
+        scroll_height = driver.execute_script('return document.body.parentNode.scrollHeight')
+        driver.set_window_size(scroll_width, scroll_height)
+        driver.save_screenshot(out_name)
+        driver.quit()
 
     @staticmethod
     def check_time_format(data, time_columns):
@@ -208,4 +247,7 @@ def exec_regular(time_):
 if __name__ == '__main__':
     # exec_regular('00:00')
     Display().main()
+
+
+
     
